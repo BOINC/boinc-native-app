@@ -1,0 +1,402 @@
+# This file is part of BOINC.
+# https://boinc.berkeley.edu
+# Copyright (C) 2025 University of California
+#
+# BOINC is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Lesser General Public License
+# as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# BOINC is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
+
+name: build
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron:  '0 0 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+    android:
+      name: Android
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          triplet: [ 'arm-android', 'arm-neon-android', 'arm64-android', 'x64-android', 'x86-android' ]
+          ndk: [ 'r23c' ]
+        fail-fast: false
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v5
+
+        - name: Bootstrap vcpkg
+          run: |
+            ./bootstrap.sh
+
+        - name: Install Android NDK
+          run: |
+            curl -L -o android-ndk.zip https://dl.google.com/android/repository/android-ndk-${{ matrix.ndk }}-linux.zip
+            unzip android-ndk.zip
+
+        - name: Prepare build
+          run: |
+            mkdir -p build
+
+        - name: Configure arm build
+          if: ${{ matrix.triplet == 'arm-android' }}
+          run: |
+            export ANDROID_NDK_HOME=$(pwd)/android-ndk-${{ matrix.ndk }}
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
+            toolchain_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+            tc_binaries="${toolchain_root}/bin"
+            tc_includes="${ANDROID_NDK_HOME}/arm-linux-androideabi"
+            export PATH="${tc_includes}:${tc_binaries}:${PATH}"
+            echo "PATH=${PATH}" >> $GITHUB_ENV
+            sysroot="${toolchain_root}/sysroot/"
+            includes="${ANDROID_NDK_HOME}/arm-linux-androideabi/"
+            CC="armv7a-linux-androideabi28-clang"
+            CXX="armv7a-linux-androideabi28-clang++"
+            LD="armv7a-linux-androideabi28-ld"
+            CFLAGS="--sysroot=${sysroot} -I${includes}/include -O3 -fomit-frame-pointer -fPIE -march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID_ABI=armeabi-v7a"
+            CXXFLAGS="${CFLAGS}"
+            LDFLAGS="-L${includes}/usr/lib -L${includes}/lib -fPIE -pie -march=armv7-a -static-libstdc++ -llog -latomic -Wl,--fix-cortex-a8"
+            cmake -E env CC="${CC}" CXX="${CXX}" LD="${LD}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure arm-neon build
+          if: ${{ matrix.triplet == 'arm-neon-android' }}
+          run: |
+            export ANDROID_NDK_HOME="$(pwd)/android-ndk-${{ matrix.ndk }}"
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
+            toolchain_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+            tc_binaries="${toolchain_root}/bin"
+            tc_includes="${ANDROID_NDK_HOME}/arm-linux-androideabi"
+            export PATH="${tc_includes}:${tc_binaries}:${PATH}"
+            echo "PATH=${PATH}" >> $GITHUB_ENV
+            sysroot="${toolchain_root}/sysroot/"
+            includes="${ANDROID_NDK_HOME}/arm-linux-androideabi/"
+            CC="armv7a-linux-androideabi28-clang"
+            CXX="armv7a-linux-androideabi28-clang++"
+            LD="armv7a-linux-androideabi28-ld"
+            CFLAGS="--sysroot=${sysroot} -I${includes}/include -O3 -fomit-frame-pointer -fPIE -march=armv7-a -mfloat-abi=softfp -mfpu=neon-vfpv3 -DANDROID_ABI=armeabi-v7a"
+            CXXFLAGS="${CFLAGS}"
+            LDFLAGS="-L${includes}/usr/lib -L${includes}/lib -fPIE -pie -march=armv7-a -static-libstdc++ -llog -latomic -Wl,--fix-cortex-a8"
+            cmake -E env CC="${CC}" CXX="${CXX}" LD="${LD}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure arm64 build
+          if: ${{ matrix.triplet == 'arm64-android' }}
+          run: |
+            export ANDROID_NDK_HOME="$(pwd)/android-ndk-${{ matrix.ndk }}"
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
+            toolchain_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+            tc_binaries="${toolchain_root}/bin"
+            tc_includes="${ANDROID_NDK_HOME}/aarch64-linux-android"
+            export PATH="${tc_includes}:${tc_binaries}:${PATH}"
+            echo "PATH=${PATH}" >> $GITHUB_ENV
+            sysroot="${toolchain_root}/sysroot/"
+            includes="${ANDROID_NDK_HOME}/aarch64-linux-android/"
+            CC="aarch64-linux-android28-clang"
+            CXX="aarch64-linux-android28-clang++"
+            LD="aarch64-linux-android28-ld"
+            CFLAGS="--sysroot=${sysroot} -I${includes}/include -O3 -fomit-frame-pointer -fPIE -DANDROID_ABI=arm64-v8a"
+            CXXFLAGS="${CFLAGS}"
+            LDFLAGS="-L${includes}/usr/lib -L${includes}/lib -fPIE -pie -static-libstdc++ -llog -latomic"
+            cmake -E env CC="${CC}" CXX="${CXX}" LD="${LD}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x64 build
+          if: ${{ matrix.triplet == 'x64-android' }}
+          run: |
+            export ANDROID_NDK_HOME="$(pwd)/android-ndk-${{ matrix.ndk }}"
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
+            toolchain_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+            tc_binaries="${toolchain_root}/bin"
+            tc_includes="${ANDROID_NDK_HOME}/x86_64-linux-android"
+            export PATH="${tc_includes}:${tc_binaries}:${PATH}"
+            echo "PATH=${PATH}" >> $GITHUB_ENV
+            sysroot="${toolchain_root}/sysroot/"
+            includes="${ANDROID_NDK_HOME}/x86_64-linux-android/"
+            CC="x86_64-linux-android28-clang"
+            CXX="x86_64-linux-android28-clang++"
+            LD="x86_64-linux-android28-ld"
+            CFLAGS="--sysroot=${sysroot} -I${includes}/include -O3 -fomit-frame-pointer -fPIE -DANDROID_ABI=x86_64"
+            CXXFLAGS="${CFLAGS}"
+            LDFLAGS="-L${includes}/usr/lib -L${includes}/lib -fPIE -pie -static-libstdc++ -llog -latomic"
+            cmake -E env CC="${CC}" CXX="${CXX}" LD="${LD}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x86 build
+          if: ${{ matrix.triplet == 'x86-android' }}
+          run: |
+            export ANDROID_NDK_HOME="$(pwd)/android-ndk-${{ matrix.ndk }}"
+            echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}" >> $GITHUB_ENV
+            toolchain_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
+            tc_binaries="${toolchain_root}/bin"
+            tc_includes="${ANDROID_NDK_HOME}/i686-linux-android"
+            export PATH="${tc_includes}:${tc_binaries}:${PATH}"
+            echo "PATH=${PATH}" >> $GITHUB_ENV
+            sysroot="${toolchain_root}/sysroot/"
+            includes="${ANDROID_NDK_HOME}/i686-linux-android/"
+            CC="i686-linux-android28-clang"
+            CXX="i686-linux-android28-clang++"
+            LD="i686-linux-android28-ld"
+            CFLAGS="--sysroot=${sysroot} -I${includes}/include -O3 -fomit-frame-pointer -fPIE  -DANDROID_ABI=x86"
+            CXXFLAGS="${CFLAGS}"
+            LDFLAGS="-L${includes}/usr/lib -L${includes}/lib -fPIE -pie -static-libstdc++ -llog -latomic"
+            cmake -E env CC="${CC}" CXX="${CXX}" LD="${LD}" CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Build
+          run: |
+            cmake --build build --config Release
+
+        - name: Upload artifacts
+          if: ${{ success() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: boinc-native-app-${{ matrix.triplet }}-${{ matrix.ndk }}
+            path: build/boinc-native-app
+
+        - name: Upload logs on failure
+          if: ${{ failure() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: vcpkg_logs-${{ matrix.triplet }}-${{ matrix.ndk }}
+            path: vcpkg/buildtrees/**/*.log
+
+    linux:
+      name: Linux
+      runs-on: ubuntu-latest
+      container:
+        image: debian:bullseye
+      strategy:
+        matrix:
+          triplet: [ 'arm-linux', 'arm64-linux', 'x64-linux', 'x86-linux' ]
+        fail-fast: false
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            apt-get -qq update
+            apt-get install -y make build-essential m4 pkg-config autoconf libtool git curl zip unzip tar cmake
+        
+        - name: Install x86 dependencies
+          if: ${{ matrix.triplet == 'x86-linux' }}
+          run: |
+            apt-get update
+            apt-get install -y g++-multilib gcc-multilib
+
+        - name: Install arm dependencies
+          if: ${{ matrix.triplet == 'arm-linux' }}
+          run: |
+            apt-get update
+            apt-get install -y g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+
+        - name: Install arm64 dependencies
+          if: ${{ matrix.triplet == 'arm64-linux' }}
+          run: |
+            apt-get update
+            apt-get install -y g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+        - name: Bootstrap vcpkg
+          run: |
+            ./bootstrap.sh
+
+        - name: Prepare build
+          run: |
+            mkdir -p build
+
+        - name: Configure arm build
+          if: ${{ matrix.triplet == 'arm-linux' }}
+          run: |
+            cmake -E env CC="arm-linux-gnueabihf-gcc" CXX="arm-linux-gnueabihf-g++" LD="arm-linux-gnueabihf-ld" CFLAGS="-march=armv7-a+vfpv3-d16" CXXFLAGS="-march=armv7-a+vfpv3-d16" LDFLAGS="-march=armv7-a+vfpv3-d16" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure arm64 build
+          if: ${{ matrix.triplet == 'arm64-linux' }}
+          run: |
+            cmake -E env CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" LD="aarch64-linux-gnu-ld" CFLAGS="-march=armv8-a" CXXFLAGS="-march=armv8-a" LDFLAGS="-march=armv8-a" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x64 build
+          if: ${{ matrix.triplet == 'x64-linux' }}
+          run: |
+            cmake -E env CC="gcc -m64" CXX="g++ -m64" CFLAGS="-m64" CXXFLAGS="-m64" LDFLAGS="-m64" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x86 build
+          if: ${{ matrix.triplet == 'x86-linux' }}
+          run: |
+            cmake -E env CC="gcc -m32" CXX="g++ -m32" CFLAGS="-m32" CXXFLAGS="-m32" LDFLAGS="-m32" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Build
+          run: |
+            cmake --build build --config Release
+
+        - name: Upload artifacts
+          if: ${{ success() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: boinc-native-app-${{ matrix.triplet }}
+            path: build/boinc-native-app
+
+        - name: Upload logs on failure
+          if: ${{ failure() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: vcpkg_logs-${{ matrix.triplet }}
+            path: vcpkg/buildtrees/**/*.log
+
+    macos:
+      name: macOS
+      runs-on: macos-latest
+      strategy:
+        matrix:
+          triplet: [ 'arm64-osx', 'x64-osx' ]
+        fail-fast: false
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v5
+
+        - name: Bootstrap vcpkg
+          run: |
+            ./bootstrap.sh
+
+        - name: Prepare build
+          run: |
+            mkdir -p build
+
+        - name: Configure arm64 build
+          if: ${{ matrix.triplet == 'arm64-osx' }}
+          run: |
+            cmake -B build -S . -DCMAKE_OSX_ARCHITECTURES=arm64 -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x64 build
+          if: ${{ matrix.triplet == 'x64-osx' }}
+          run: |
+            cmake -B build -S . -DCMAKE_OSX_ARCHITECTURES=x86_64 -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Build
+          run: |
+            cmake --build build --config Release
+
+        - name: Upload artifacts
+          if: ${{ success() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: boinc-native-app-${{ matrix.triplet }}
+            path: build/boinc-native-app
+
+        - name: Upload logs on failure
+          if: ${{ failure() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: vcpkg_logs-${{ matrix.triplet }}
+            path: vcpkg/buildtrees/**/*.log
+
+    mingw:
+      name: MinGW
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          triplet: [ 'x64-mingw-static', 'x86-mingw-static' ]
+        fail-fast: false
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v5
+          
+        - name: Install dependencies
+          run: |
+            sudo apt-get -qq update
+            sudo apt-get install -y mingw-w64
+
+        - name: Bootstrap vcpkg
+          run: |
+            ./bootstrap.sh
+
+        - name: Prepare build
+          run: |
+            mkdir -p build
+
+        - name: Configure x64 build
+          if: ${{ matrix.triplet == 'x64-mingw-static' }}
+          run: |
+            cmake -E env CC="x86_64-w64-mingw32-gcc" CXX="x86_64-w64-mingw32-g++" LD="x86_64-w64-mingw32-ld" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x86 build
+          if: ${{ matrix.triplet == 'x86-mingw-static' }}
+          run: |
+            cmake -E env CC="i686-w64-mingw32-gcc" CXX="i686-w64-mingw32-g++" LD="i686-w64-mingw32-ld" cmake -B build -S . -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Build
+          run: |
+            cmake --build build --config Release
+
+        - name: Upload artifacts
+          if: ${{ success() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: boinc-native-app-${{ matrix.triplet }}
+            path: build/boinc-native-app.exe
+
+        - name: Upload logs on failure
+          if: ${{ failure() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: vcpkg_logs-${{ matrix.triplet }}
+            path: vcpkg/buildtrees/**/*.log
+
+    windows:
+      name: Windows
+      runs-on: windows-latest
+      strategy:
+        matrix:
+          triplet: [ 'x64-windows-static', 'x86-windows-static' ]
+        fail-fast: false
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v5
+
+        - name: Bootstrap vcpkg
+          shell: cmd
+          run: |
+            bootstrap.bat
+
+        - name: Prepare build
+          run: |
+            mkdir -p build
+
+        - name: Configure x64 build
+          if: ${{ matrix.triplet == 'x64-windows-static' }}
+          run: |
+            cmake -B build -S . -A x64 -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Configure x86 build
+          if: ${{ matrix.triplet == 'x86-windows-static' }}
+          run: |
+            cmake -B build -S . -A Win32 -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+
+        - name: Build
+          run: |
+            cmake --build build --config Release
+
+        - name: Upload artifacts
+          if: ${{ success() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: boinc-native-app-${{ matrix.triplet }}
+            path: build/Release/boinc-native-app.exe
+
+        - name: Upload logs on failure
+          if: ${{ failure() }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: vcpkg_logs-${{ matrix.triplet }}
+            path: vcpkg/buildtrees/**/*.log

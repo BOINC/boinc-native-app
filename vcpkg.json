@@ -1,0 +1,6 @@
+{
+    "name": "boinc-native-app",
+    "dependencies": [
+        "boinc"
+    ]
+}

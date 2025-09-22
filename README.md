@@ -24,10 +24,12 @@ To build the boinc-native-app application, follow these steps:
    cd boinc-native-app
    ```
 2. Bootstrap the project:
+
     For Unix-like systems (Linux, macOS):
    ```bash
    ./bootstrap.sh
    ```
+
     For Windows:
    ```bash
    bootstrap.bat
@@ -54,10 +56,13 @@ To build the boinc-native-app application, follow these steps:
 ## Building the boinc-native-app application using GitHub Actions (for release)
 
 This repository includes a GitHub Actions workflow that automates the build process for multiple platforms. The workflow is defined in the `.github/workflows/build.yml` file.
+
 To trigger the build process using GitHub Actions, simply push your changes to the repository or create a pull request. The workflow will automatically run and build the application for the specified platforms.
+
 The build artifacts will be available in the "Actions" tab of the repository once the workflow completes.
+
 It is recommended to fork the repository and enable GitHub Actions in your fork to customize the build process or add additional platforms.
 
 ## Modifying the boinc-native-app application
 
-You can modify the source code of the boinc-native-app application. After making changes (including updating the CMakelists.txt file), follow the build steps outlined above to compile the updated application.
+You can modify the source code of the boinc-native-app application. After making changes (including updating the `CMakeLists.txt` file), follow the build steps outlined above to compile the updated application.

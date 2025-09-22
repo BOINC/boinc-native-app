@@ -65,4 +65,8 @@ It is recommended to fork the repository and enable GitHub Actions in your fork 
 
 ## Modifying the boinc-native-app application
 
-You can modify the source code of the boinc-native-app application. After making changes (including updating the `CMakeLists.txt` file), follow the build steps outlined above to compile the updated application.
+You can modify the source code of the boinc-native-app application.
+
+All the application dependencies are managed using [vcpkg](https://vcpkg.io). To add new dependencies, update the `vcpkg.json` and `CMakeLists.txt` files accordingly.
+
+After making changes, follow the build steps outlined above to compile the updated application.
